@@ -1,6 +1,11 @@
 --[[
-	Rayflide Pro v2.1.0
-	Key System مدمج ومرن
+	Rayflide Pro v2.1.0 GLOBAL EDITION
+	- Full UI Library (Windows, Tabs, All Elements, 12 Themes)
+	- Integrated Key System (AddKey/AddKeys/SetupKeySystem)
+	- Notifications Queue
+	- Full HSV Color Picker
+	- Config Save/Load
+	- Everything in ONE file
 ]]
 
 local Rayflide = {
@@ -9,9 +14,12 @@ local Rayflide = {
 	Theme = {},
 	Connections = {},
 	Windows = {},
-	Keys = {},              -- 🔑 قائمة المفاتيح (تقدر تضيف فيها)
-	AccessGranted = false,  -- هل تحقق المستخدم؟
+	Keys = {},
+	AccessGranted = false,
+	CurrentKey = nil,
+	CurrentTier = nil,
 	Hwid = nil,
+	RequireAccess = false,
 	Defaults = {
 		WindowSize = UDim2.fromOffset(600, 560),
 		MinWindowSize = Vector2.new(420, 380),
@@ -30,7 +38,9 @@ local CoreGui = game:GetService("CoreGui")
 local TextService = game:GetService("TextService")
 local LocalPlayer = Players.LocalPlayer
 
--- UTILS
+-- ============================================================
+-- UTILITIES
+-- ============================================================
 local function ProtectGui(gui)
 	if syn and syn.protect_gui then pcall(syn.protect_gui, gui)
 	elseif protect_gui then pcall(protect_gui, gui) end
@@ -75,10 +85,8 @@ end
 local function Ripple(button, color)
 	local ripple = Create("Frame", {
 		BackgroundColor3 = color or Rayflide.Theme.Current.Accent,
-		BackgroundTransparency = 0.5,
-		Size = UDim2.new(0, 0, 0, 0),
-		Position = UDim2.new(0.5, 0, 0.5, 0),
-		Parent = button,
+		BackgroundTransparency = 0.5, Size = UDim2.new(0, 0, 0, 0),
+		Position = UDim2.new(0.5, 0, 0.5, 0), Parent = button,
 	})
 	AddCorner(ripple, 999)
 	local maxSize = math.max(button.AbsoluteSize.X, button.AbsoluteSize.Y) * 1.8
@@ -105,7 +113,9 @@ end
 
 Rayflide.Hwid = GetHwid()
 
--- THEMES
+-- ============================================================
+-- THEMES (12)
+-- ============================================================
 local DefaultTheme = {
 	Background = Color3.fromRGB(18, 18, 22), Topbar = Color3.fromRGB(26, 26, 32),
 	ElementBackground = Color3.fromRGB(32, 32, 40), ElementBackgroundHover = Color3.fromRGB(42, 42, 52),
@@ -231,52 +241,8 @@ Rayflide.Theme.Rose = {
 }
 
 -- ============================================================
--- 🔑 KEY SYSTEM (الجزء الأساسي)
+-- 🔑 KEY SYSTEM
 -- ============================================================
-
---[[
-	كيف تستخدم:
-	
-	-- 1. أضف مفاتيح (تقدر تضيف بأي وقت):
-	Rayflide:AddKey("ABC123", {
-		Tier = "VIP",       -- اختياري
-		Uses = 5,           -- كم مرة يقدر يستخدم
-		Expiry = os.time() + 86400,  -- اختياري
-		Hwid = "abc...",    -- اختياري (ربط بجهاز)
-	})
-	
-	-- 2. أضف مفاتيح بكمية دفعة واحدة:
-	Rayflide:AddKeys({"KEY1", "KEY2", "KEY3"})
-	
-	-- 3. امسح مفتاح:
-	Rayflide:RemoveKey("ABC123")
-	
-	-- 4. افتح شاشة المفاتيح:
-	Rayflide:SetupKeySystem({
-		Title = "My Hub",
-		Subtitle = "أدخل مفتاحك",
-		OnSuccess = function()
-			print("تم التحقق!")
-		end,
-	})
-	
-	-- 5. تحقق برمجياً (بدون UI):
-	local ok, msg = Rayflide:ValidateKey("ABC123")
-	
-	-- 6. تحقق من الوصول:
-	if Rayflide:HasAccess() then
-		-- مسموح
-	end
-	
-	-- 7. تفعيل الوضع الإجباري:
-	Rayflide.RequireAccess = true  -- CreateWindow ترجع nil بدون مفتاح
-]]
-
-Rayflide.RequireAccess = false  -- افتراضي: ما يجبر
-Rayflide.AccessGranted = false
-Rayflide.Keys = {}
-
--- إضافة مفتاح واحد
 function Rayflide:AddKey(key, options)
 	if not key or key == "" then return false end
 	options = options or {}
@@ -290,15 +256,14 @@ function Rayflide:AddKey(key, options)
 	return true
 end
 
--- إضافة مجموعة مفاتيح
 function Rayflide:AddKeys(list, options)
+	local count = 0
 	for _, key in ipairs(list) do
-		Rayflide:AddKey(key, options)
+		if Rayflide:AddKey(key, options) then count = count + 1 end
 	end
-	return #list
+	return count
 end
 
--- إزالة مفتاح
 function Rayflide:RemoveKey(key)
 	if Rayflide.Keys[key] then
 		Rayflide.Keys[key] = nil
@@ -307,29 +272,17 @@ function Rayflide:RemoveKey(key)
 	return false
 end
 
--- التحقق من مفتاح
 function Rayflide:ValidateKey(key)
-	if not key or key == "" then
-		return false, "المفتاح فارغ"
-	end
+	if not key or key == "" then return false, "المفتاح فارغ" end
 	local info = Rayflide.Keys[key]
-	if not info then
-		return false, "مفتاح غير صالح"
-	end
-	if info.Expiry and os.time() > info.Expiry then
-		return false, "المفتاح منتهي الصلاحية"
-	end
-	if info.Hwid and info.Hwid ~= "" and info.Hwid ~= Rayflide.Hwid then
-		return false, "المفتاح مربوط بجهاز آخر"
-	end
-	if info.Used >= info.Uses then
-		return false, "المفتاح استنفد عدد الاستخدامات"
-	end
+	if not info then return false, "مفتاح غير صالح" end
+	if info.Expiry and os.time() > info.Expiry then return false, "المفتاح منتهي الصلاحية" end
+	if info.Hwid and info.Hwid ~= "" and info.Hwid ~= Rayflide.Hwid then return false, "المفتاح مربوط بجهاز آخر" end
+	if info.Used >= info.Uses then return false, "المفتاح استنفد عدد الاستخدامات" end
 	info.Used = info.Used + 1
 	Rayflide.AccessGranted = true
 	Rayflide.CurrentKey = key
 	Rayflide.CurrentTier = info.Tier
-	-- حفظ المفتاح
 	if writefile then
 		pcall(function()
 			if not isfolder("Rayflide") then makefolder("Rayflide") end
@@ -339,12 +292,10 @@ function Rayflide:ValidateKey(key)
 	return true, "تم التحقق بنجاح"
 end
 
--- هل المستخدم عنده وصول؟
 function Rayflide:HasAccess()
 	return Rayflide.AccessGranted == true
 end
 
--- تحميل مفتاح محفوظ
 function Rayflide:LoadSavedKey()
 	if isfile and isfile("Rayflide/key.txt") then
 		local ok, content = pcall(readfile, "Rayflide/key.txt")
@@ -355,89 +306,53 @@ function Rayflide:LoadSavedKey()
 	return false
 end
 
--- عرض شاشة المفاتيح
 function Rayflide:SetupKeySystem(opts)
 	opts = opts or {}
 	local title = opts.Title or "Rayflide"
 	local subtitle = opts.Subtitle or "أدخل مفتاحك للوصول"
 	local onSuccess = opts.OnSuccess
-
 	local ScreenGui = Create("ScreenGui", {
-		Name = "RayflideKeySystem",
-		ResetOnSpawn = false,
-		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-		DisplayOrder = 200,
+		Name = "RayflideKeySystem", ResetOnSpawn = false,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 200,
 	})
 	ProtectGui(ScreenGui)
-
 	local Main = Create("Frame", {
-		Name = "Main",
-		BackgroundColor3 = Rayflide.Theme.Current.Background,
+		Name = "Main", BackgroundColor3 = Rayflide.Theme.Current.Background,
 		Size = UDim2.fromOffset(440, 380),
-		Position = UDim2.new(0.5, -220, 0.5, -190),
-		Parent = ScreenGui,
+		Position = UDim2.new(0.5, -220, 0.5, -190), Parent = ScreenGui,
 	})
 	AddCorner(Main, 14)
 	AddStroke(Main, Rayflide.Theme.Current.Stroke, 1.2)
-
 	Create("TextLabel", {
-		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 0, 0, 25),
-		Size = UDim2.new(1, 0, 0, 40),
-		Font = Enum.Font.GothamBold,
-		Text = "🔑",
-		TextColor3 = Rayflide.Theme.Current.Accent,
-		TextSize = 32,
-		Parent = Main,
+		BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 25),
+		Size = UDim2.new(1, 0, 0, 40), Font = Enum.Font.GothamBold,
+		Text = "🔑", TextColor3 = Rayflide.Theme.Current.Accent, TextSize = 32, Parent = Main,
 	})
-
 	Create("TextLabel", {
-		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 0, 0, 70),
-		Size = UDim2.new(1, 0, 0, 28),
-		Font = Enum.Font.GothamBold,
-		Text = title,
-		TextColor3 = Rayflide.Theme.Current.TextColor,
-		TextSize = 20,
-		Parent = Main,
+		BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 70),
+		Size = UDim2.new(1, 0, 0, 28), Font = Enum.Font.GothamBold,
+		Text = title, TextColor3 = Rayflide.Theme.Current.TextColor, TextSize = 20, Parent = Main,
 	})
-
 	Create("TextLabel", {
-		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 0, 0, 100),
-		Size = UDim2.new(1, 0, 0, 20),
-		Font = Enum.Font.Gotham,
-		Text = subtitle,
-		TextColor3 = Rayflide.Theme.Current.SubTextColor,
-		TextSize = 13,
-		Parent = Main,
+		BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 100),
+		Size = UDim2.new(1, 0, 0, 20), Font = Enum.Font.Gotham,
+		Text = subtitle, TextColor3 = Rayflide.Theme.Current.SubTextColor, TextSize = 13, Parent = Main,
 	})
-
-	-- HWID
 	local hwidLabel = Create("TextLabel", {
 		BackgroundColor3 = Rayflide.Theme.Current.ElementBackground,
-		Position = UDim2.new(0, 30, 0, 130),
-		Size = UDim2.new(1, -100, 0, 30),
-		Font = Enum.Font.Code,
-		Text = "HWID: " .. string.sub(Rayflide.Hwid, 1, 22) .. "...",
-		TextColor3 = Rayflide.Theme.Current.SubTextColor,
-		TextSize = 11,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Parent = Main,
+		Position = UDim2.new(0, 30, 0, 130), Size = UDim2.new(1, -100, 0, 30),
+		Font = Enum.Font.Code, Text = "HWID: " .. string.sub(Rayflide.Hwid, 1, 22) .. "...",
+		TextColor3 = Rayflide.Theme.Current.SubTextColor, TextSize = 11,
+		TextXAlignment = Enum.TextXAlignment.Left, Parent = Main,
 	})
 	AddCorner(hwidLabel, 6)
 	AddPadding(hwidLabel, { 0, 0, 0, 10 })
-
 	local copyBtn = Create("TextButton", {
 		BackgroundColor3 = Rayflide.Theme.Current.ElementBackground,
-		Position = UDim2.new(1, -95, 0, 130),
-		Size = UDim2.fromOffset(65, 30),
-		Font = Enum.Font.Gotham,
-		Text = "📋 نسخ",
-		TextColor3 = Rayflide.Theme.Current.SubTextColor,
-		TextSize = 11,
-		AutoButtonColor = false,
-		Parent = Main,
+		Position = UDim2.new(1, -95, 0, 130), Size = UDim2.fromOffset(65, 30),
+		Font = Enum.Font.Gotham, Text = "📋 نسخ",
+		TextColor3 = Rayflide.Theme.Current.SubTextColor, TextSize = 11,
+		AutoButtonColor = false, Parent = Main,
 	})
 	AddCorner(copyBtn, 6)
 	copyBtn.MouseButton1Click:Connect(function()
@@ -450,48 +365,28 @@ function Rayflide:SetupKeySystem(opts)
 			copyBtn.TextColor3 = Rayflide.Theme.Current.SubTextColor
 		end
 	end)
-
-	-- Input
 	local input = Create("TextBox", {
 		BackgroundColor3 = Rayflide.Theme.Current.ElementBackground,
-		Position = UDim2.new(0, 30, 0, 175),
-		Size = UDim2.new(1, -60, 0, 44),
-		Font = Enum.Font.Gotham,
-		Text = "",
-		PlaceholderText = "أدخل المفتاح هنا...",
+		Position = UDim2.new(0, 30, 0, 175), Size = UDim2.new(1, -60, 0, 44),
+		Font = Enum.Font.Gotham, Text = "", PlaceholderText = "أدخل المفتاح هنا...",
 		TextColor3 = Rayflide.Theme.Current.TextColor,
 		PlaceholderColor3 = Rayflide.Theme.Current.SubTextColor,
-		TextSize = 14,
-		ClearTextOnFocus = false,
-		Parent = Main,
+		TextSize = 14, ClearTextOnFocus = false, Parent = Main,
 	})
 	AddCorner(input, 8)
 	AddStroke(input, Rayflide.Theme.Current.Stroke, 1)
-
 	local statusLabel = Create("TextLabel", {
-		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 30, 0, 225),
-		Size = UDim2.new(1, -60, 0, 20),
-		Font = Enum.Font.Gotham,
-		Text = "",
-		TextColor3 = Rayflide.Theme.Current.Error,
-		TextSize = 12,
-		Parent = Main,
+		BackgroundTransparency = 1, Position = UDim2.new(0, 30, 0, 225),
+		Size = UDim2.new(1, -60, 0, 20), Font = Enum.Font.Gotham,
+		Text = "", TextColor3 = Rayflide.Theme.Current.Error, TextSize = 12, Parent = Main,
 	})
-
 	local submitBtn = Create("TextButton", {
 		BackgroundColor3 = Rayflide.Theme.Current.Accent,
-		Position = UDim2.new(0, 30, 0, 255),
-		Size = UDim2.new(1, -60, 0, 44),
-		Font = Enum.Font.GothamBold,
-		Text = "🔓 التحقق من المفتاح",
-		TextColor3 = Color3.new(1,1,1),
-		TextSize = 14,
-		AutoButtonColor = false,
-		Parent = Main,
+		Position = UDim2.new(0, 30, 0, 255), Size = UDim2.new(1, -60, 0, 44),
+		Font = Enum.Font.GothamBold, Text = "🔓 التحقق من المفتاح",
+		TextColor3 = Color3.new(1,1,1), TextSize = 14, AutoButtonColor = false, Parent = Main,
 	})
 	AddCorner(submitBtn, 8)
-
 	submitBtn.MouseButton1Click:Connect(function()
 		local success, msg = Rayflide:ValidateKey(input.Text)
 		if success then
@@ -510,21 +405,12 @@ function Rayflide:SetupKeySystem(opts)
 			Tween(input, { Position = UDim2.new(0, 25, 0, 175) }, 0.05)
 		end
 	end)
-
-	input.FocusLost:Connect(function(enter)
-		if enter then submitBtn:GetPropertyChangedSignal end
-	end)
-
 	return ScreenGui
 end
 
--- تحقق تلقائي عند تحميل المكتبة (إذا كان فيه مفتاح محفوظ)
-task.defer(function()
-	Rayflide:LoadSavedKey()
-end)
-
+task.defer(function() Rayflide:LoadSavedKey() end)
 -- ============================================================
--- NOTIFICATIONS
+-- NOTIFICATIONS QUEUE
 -- ============================================================
 local NotificationHolder
 local NotificationQueue = {}
@@ -622,12 +508,13 @@ function Rayflide:Notify(settings)
 end
 
 -- ============================================================
--- COLOR PICKER
+-- COLOR PICKER (HSV)
 -- ============================================================
 local function OpenColorPicker(parent, startColor, callback)
 	local modal = Create("Frame", {
 		BackgroundColor3 = Rayflide.Theme.Current.ElementBackground,
-		Size = UDim2.fromOffset(260, 320), Position = UDim2.new(0.5, -130, 0.5, -160),
+		Size = UDim2.fromOffset(260, 320),
+		Position = UDim2.new(0.5, -130, 0.5, -160),
 		Parent = parent, ZIndex = 50,
 	})
 	AddCorner(modal, 12)
@@ -728,7 +615,6 @@ end
 -- ============================================================
 function Rayflide:CreateWindow(settings)
 	settings = settings or {}
-	-- 🔒 تحقق من الوصول
 	if Rayflide.RequireAccess and not Rayflide:HasAccess() then
 		warn("[Rayflide] Access denied - Key required")
 		return nil
@@ -818,6 +704,8 @@ function Rayflide:CreateWindow(settings)
 		ClipsDescendants = true, Parent = Main,
 	})
 	local Pages = Create("Folder", { Name = "Pages", Parent = Content })
+
+	-- Dragging
 	local dragging, dragStart, startPos
 	Topbar.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -835,6 +723,8 @@ function Rayflide:CreateWindow(settings)
 			Main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
 		end
 	end)
+
+	-- Resize handle
 	if resizable then
 		local resizeHandle = Create("TextButton", {
 			BackgroundTransparency = 1, Size = UDim2.fromOffset(20, 20),
@@ -865,6 +755,7 @@ function Rayflide:CreateWindow(settings)
 			end
 		end)
 	end
+
 	local minimized = false
 	local maximized = false
 	local originalSize = defaultSize
@@ -895,7 +786,12 @@ function Rayflide:CreateWindow(settings)
 		task.wait(0.3)
 		ScreenGui:Destroy()
 	end)
+
 	local Window = { Tabs = {}, SelectedTab = nil, Main = Main, ScreenGui = ScreenGui }
+
+	-- ============================================================
+	-- TAB CREATION
+	-- ============================================================
 	function Window:CreateTab(name, icon)
 		name = name or "Tab"
 		local tabButton = Create("TextButton", {
@@ -954,6 +850,10 @@ function Rayflide:CreateWindow(settings)
 		end)
 		if #Window.Tabs == 0 then task.defer(Select) end
 		table.insert(Window.Tabs, Tab)
+
+		-- ============================================================
+		-- ELEMENT: SECTION
+		-- ============================================================
 		function Tab:CreateSection(sectionName)
 			local section = Create("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 28), Parent = page })
 			local label = Create("TextLabel", {
@@ -963,6 +863,10 @@ function Rayflide:CreateWindow(settings)
 			})
 			return { Set = function(_, text) label.Text = text end }
 		end
+
+		-- ============================================================
+		-- ELEMENT: BUTTON
+		-- ============================================================
 		function Tab:CreateButton(opts)
 			opts = opts or {}
 			local height = opts.Height or 42
@@ -997,6 +901,10 @@ function Rayflide:CreateWindow(settings)
 			end)
 			return { Set = function(_, text) btnLabel.Text = text end }
 		end
+
+		-- ============================================================
+		-- ELEMENT: TOGGLE
+		-- ============================================================
 		function Tab:CreateToggle(opts)
 			opts = opts or {}
 			local flag = opts.Flag
@@ -1008,7 +916,7 @@ function Rayflide:CreateWindow(settings)
 			})
 			AddCorner(toggleFrame, 8)
 			AddStroke(toggleFrame, Rayflide.Theme.Current.Stroke, 1)
-			local label = Create("TextLabel", {
+			Create("TextLabel", {
 				BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 0),
 				Size = UDim2.new(1, -70, 1, 0), Font = Enum.Font.GothamMedium,
 				Text = opts.Name or "Toggle", TextColor3 = Rayflide.Theme.Current.TextColor,
@@ -1038,6 +946,10 @@ function Rayflide:CreateWindow(settings)
 			clickBtn.MouseButton1Click:Connect(function() Set(not current) end)
 			return { Set = Set, Get = function() return current end }
 		end
+
+		-- ============================================================
+		-- ELEMENT: SLIDER
+		-- ============================================================
 		function Tab:CreateSlider(opts)
 			opts = opts or {}
 			local min = (opts.Range and opts.Range[1]) or 0
@@ -1053,7 +965,7 @@ function Rayflide:CreateWindow(settings)
 			})
 			AddCorner(sliderFrame, 8)
 			AddStroke(sliderFrame, Rayflide.Theme.Current.Stroke, 1)
-			local label = Create("TextLabel", {
+			Create("TextLabel", {
 				BackgroundTransparency = 1, Position = UDim2.new(0, 14, 0, 8),
 				Size = UDim2.new(0.6, 0, 0, 18), Font = Enum.Font.GothamMedium,
 				Text = opts.Name or "Slider", TextColor3 = Rayflide.Theme.Current.TextColor,
@@ -1119,6 +1031,10 @@ function Rayflide:CreateWindow(settings)
 			end)
 			return { Set = Set, Get = function() return current end }
 		end
+
+		-- ============================================================
+		-- ELEMENT: INPUT
+		-- ============================================================
 		function Tab:CreateInput(opts)
 			opts = opts or {}
 			local flag = opts.Flag
@@ -1130,7 +1046,7 @@ function Rayflide:CreateWindow(settings)
 			})
 			AddCorner(inputFrame, 8)
 			AddStroke(inputFrame, Rayflide.Theme.Current.Stroke, 1)
-			local label = Create("TextLabel", {
+			Create("TextLabel", {
 				BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 0),
 				Size = UDim2.new(0.35, 0, 1, 0), Font = Enum.Font.GothamMedium,
 				Text = opts.Name or "Input", TextColor3 = Rayflide.Theme.Current.TextColor,
@@ -1161,6 +1077,10 @@ function Rayflide:CreateWindow(settings)
 				Get = function() return current end,
 			}
 		end
+
+		-- ============================================================
+		-- ELEMENT: DROPDOWN
+		-- ============================================================
 		function Tab:CreateDropdown(opts)
 			opts = opts or {}
 			local options = opts.Options or { "Option 1", "Option 2" }
@@ -1174,7 +1094,7 @@ function Rayflide:CreateWindow(settings)
 			})
 			AddCorner(dropFrame, 8)
 			AddStroke(dropFrame, Rayflide.Theme.Current.Stroke, 1)
-			local label = Create("TextLabel", {
+			Create("TextLabel", {
 				BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 0),
 				Size = UDim2.new(0.5, 0, 0, 42), Font = Enum.Font.GothamMedium,
 				Text = opts.Name or "Dropdown", TextColor3 = Rayflide.Theme.Current.TextColor,
@@ -1196,7 +1116,7 @@ function Rayflide:CreateWindow(settings)
 			local open = false
 			local function Toggle()
 				open = not open
-				local targetHeight = open and (42 + #options * 32 + 16) or 42
+				local targetHeight = open and (86 + math.max(#options, 3) * 32 + 40) or 42
 				Tween(dropFrame, { Size = UDim2.new(1, 0, 0, targetHeight) }, 0.25)
 				arrow.Text = open and "▴" or "▾"
 			end
@@ -1215,20 +1135,21 @@ function Rayflide:CreateWindow(settings)
 			AddCorner(searchBox, 6)
 			local optionsHolder = Create("ScrollingFrame", {
 				BackgroundTransparency = 1, Position = UDim2.new(0, 8, 0, 80),
-				Size = UDim2.new(1, -16, 0, 0), CanvasSize = UDim2.new(0, 0, 0, 0),
+				Size = UDim2.new(1, -16, 0, #options * 32 + 4),
+				CanvasSize = UDim2.new(0, 0, 0, #options * 32 + 4),
 				ScrollBarThickness = 2, BorderSizePixel = 0, Parent = dropFrame,
 			})
 			local optionButtons = {}
 			local function refresh()
 				local query = string.lower(searchBox.Text)
+				local visibleCount = 0
 				for _, b in pairs(optionButtons) do
 					b.Visible = string.find(string.lower(b.Text), query, 1, true) ~= nil
+					if b.Visible then visibleCount = visibleCount + 1 end
 				end
-				local count = 0
-				for _, b in pairs(optionButtons) do if b.Visible then count = count + 1 end end
-				optionsHolder.CanvasSize = UDim2.new(0, 0, 0, count * 32 + 4)
+				optionsHolder.CanvasSize = UDim2.new(0, 0, 0, math.max(visibleCount * 32, 30))
 				if open then
-					Tween(dropFrame, { Size = UDim2.new(1, 0, 0, 86 + math.max(#options, 3) * 32 + 40) }, 0.2)
+					Tween(dropFrame, { Size = UDim2.new(1, 0, 0, 86 + math.max(visibleCount, 3) * 32 + 20) }, 0.2)
 				end
 			end
 			searchBox:GetPropertyChangedSignal("Text"):Connect(refresh)
@@ -1273,6 +1194,10 @@ function Rayflide:CreateWindow(settings)
 				Get = function() return current end,
 			}
 		end
+
+		-- ============================================================
+		-- ELEMENT: LABEL
+		-- ============================================================
 		function Tab:CreateLabel(opts)
 			opts = opts or {}
 			local labelFrame = Create("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 24), Parent = page })
@@ -1283,6 +1208,10 @@ function Rayflide:CreateWindow(settings)
 			})
 			return { Set = function(_, t) text.Text = t end }
 		end
+
+		-- ============================================================
+		-- ELEMENT: PARAGRAPH
+		-- ============================================================
 		function Tab:CreateParagraph(opts)
 			opts = opts or {}
 			local para = Create("Frame", {
@@ -1319,6 +1248,10 @@ function Rayflide:CreateWindow(settings)
 				end
 			}
 		end
+
+		-- ============================================================
+		-- ELEMENT: KEYBIND
+		-- ============================================================
 		function Tab:CreateKeybind(opts)
 			opts = opts or {}
 			local current = opts.CurrentKeybind or "E"
@@ -1330,7 +1263,7 @@ function Rayflide:CreateWindow(settings)
 			})
 			AddCorner(kbFrame, 8)
 			AddStroke(kbFrame, Rayflide.Theme.Current.Stroke, 1)
-			local label = Create("TextLabel", {
+			Create("TextLabel", {
 				BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 0),
 				Size = UDim2.new(0.6, 0, 1, 0), Font = Enum.Font.GothamMedium,
 				Text = opts.Name or "Keybind", TextColor3 = Rayflide.Theme.Current.TextColor,
@@ -1376,6 +1309,10 @@ function Rayflide:CreateWindow(settings)
 				Get = function() return current end,
 			}
 		end
+
+		-- ============================================================
+		-- ELEMENT: COLOR PICKER
+		-- ============================================================
 		function Tab:CreateColorPicker(opts)
 			opts = opts or {}
 			local current = opts.Color or Color3.fromRGB(99, 102, 241)
@@ -1387,7 +1324,7 @@ function Rayflide:CreateWindow(settings)
 			})
 			AddCorner(cpFrame, 8)
 			AddStroke(cpFrame, Rayflide.Theme.Current.Stroke, 1)
-			local label = Create("TextLabel", {
+			Create("TextLabel", {
 				BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 0),
 				Size = UDim2.new(1, -60, 1, 0), Font = Enum.Font.GothamMedium,
 				Text = opts.Name or "Color", TextColor3 = Rayflide.Theme.Current.TextColor,
@@ -1419,8 +1356,13 @@ function Rayflide:CreateWindow(settings)
 				Get = function() return current end,
 			}
 		end
+
 		return Tab
 	end
+
+	-- ============================================================
+	-- CONFIG SYSTEM
+	-- ============================================================
 	if configSaving.Enabled then
 		local folder = configSaving.FolderName or "Rayflide"
 		local file = (configSaving.FileName or "config") .. ".json"
@@ -1446,9 +1388,14 @@ function Rayflide:CreateWindow(settings)
 		end
 		task.defer(function() Window:LoadConfig() end)
 	end
+
 	function Window:Destroy()
 		ScreenGui:Destroy()
 	end
+
+	-- ============================================================
+	-- LOADING SCREEN
+	-- ============================================================
 	local Loading = Create("Frame", {
 		BackgroundColor3 = Rayflide.Theme.Current.Background,
 		Size = UDim2.new(1, 0, 1, 0), Parent = Main, ZIndex = 10,
@@ -1501,10 +1448,14 @@ function Rayflide:CreateWindow(settings)
 		task.wait(0.4)
 		Loading:Destroy()
 	end)
+
 	table.insert(Rayflide.Windows, Window)
 	return Window
 end
 
+-- ============================================================
+-- GLOBAL HELPERS
+-- ============================================================
 function Rayflide:SetTheme(name)
 	if Rayflide.Theme[name] then
 		Rayflide.Theme.Current = table.clone(Rayflide.Theme[name])
