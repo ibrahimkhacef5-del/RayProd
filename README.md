@@ -122,7 +122,7 @@ Rayflide/
 - Built from scratch with pure Luau
 - Optimized for modern executors (2025-2026)
 
-**Made with ❤️ by Grok (xAI)**
+**Mode Good**
 
 ---
 
