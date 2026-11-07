@@ -1,19 +1,37 @@
 --[[
-	Rayflide Pro By Ibrahim
+	Rayflide Pro v2.0.0
+	Complete Redesign - Enhanced UI Library
 	
-	For Delta and ......
-	
-	If want any help 
-	
-	my Instagram :https://Instagram.com/uzcawe
+	Features:
+	- Beautiful redesigned sliders with grab handles
+	- Modern button styles with icons & animations
+	- Resizable window with drag handles
+	- 12+ Color themes
+	- Better loading screen with progress bar
+	- Customizable sizes for all elements
+	- Ripple effects, hover animations
+	- Search in dropdowns
+	- Full color picker (HSV)
+	- Config saving/loading
+	- Keybind system
+	- Minimize/Maximize/Close animations
 ]]
 
 local Rayflide = {
-	Version = "1.0.0",
+	Version = "2.0.0",
 	Flags = {},
 	Theme = {},
 	Connections = {},
 	Windows = {},
+	Defaults = {
+		WindowSize = UDim2.fromOffset(560, 520),
+		MinWindowSize = Vector2.new(400, 350),
+		MaxWindowSize = Vector2.new(900, 700),
+		ElementHeight = 40,
+		Corner = 10,
+		Padding = 10,
+		AnimationSpeed = 0.22,
+	},
 }
 
 -- Services
@@ -23,12 +41,15 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local CoreGui = game:GetService("CoreGui")
+local TextService = game:GetService("TextService")
 local GuiService = game:GetService("GuiService")
 
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
--- Utility
+-- ============================================================
+-- UTILITIES
+-- ============================================================
 local function ProtectGui(gui)
 	if syn and syn.protect_gui then
 		pcall(syn.protect_gui, gui)
@@ -56,7 +77,11 @@ local function Create(class, props)
 end
 
 local function Tween(obj, props, time, style, dir)
-	local t = TweenService:Create(obj, TweenInfo.new(time or 0.25, style or Enum.EasingStyle.Quint, dir or Enum.EasingDirection.Out), props)
+	local t = TweenService:Create(obj, TweenInfo.new(
+		time or Rayflide.Defaults.AnimationSpeed,
+		style or Enum.EasingStyle.Quint,
+		dir or Enum.EasingDirection.Out
+	), props)
 	t:Play()
 	return t
 end
@@ -66,15 +91,64 @@ local function Round(num, places)
 	return math.floor(num * mult + 0.5) / mult
 end
 
--- Default Theme (Dark modern)
+local function AddCorner(obj, r)
+	return Create("UICorner", { CornerRadius = UDim.new(0, r or Rayflide.Defaults.Corner), Parent = obj })
+end
+
+local function AddStroke(obj, color, thickness)
+	return Create("UIStroke", {
+		Color = color or Rayflide.Theme.Current.Stroke,
+		Thickness = thickness or 1,
+		Parent = obj,
+	})
+end
+
+local function AddPadding(obj, all)
+	local p = typeof(all) == "table" and all or { all, all, all, all }
+	return Create("UIPadding", {
+		PaddingTop = UDim.new(0, p[1] or 0),
+		PaddingRight = UDim.new(0, p[2] or 0),
+		PaddingBottom = UDim.new(0, p[3] or 0),
+		PaddingLeft = UDim.new(0, p[4] or 0),
+		Parent = obj,
+	})
+end
+
+local function Ripple(button, color)
+	local ripple = Create("Frame", {
+		BackgroundColor3 = color or Rayflide.Theme.Current.Accent,
+		BackgroundTransparency = 0.5,
+		Size = UDim2.new(0, 0, 0, 0),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
+		Parent = button,
+	})
+	AddCorner(ripple, 999)
+	local maxSize = math.max(button.AbsoluteSize.X, button.AbsoluteSize.Y) * 1.8
+	Tween(ripple, {
+		Size = UDim2.fromOffset(maxSize, maxSize),
+		Position = UDim2.new(0.5, -maxSize/2, 0.5, -maxSize/2),
+		BackgroundTransparency = 1,
+	}, 0.5)
+	task.delay(0.55, function()
+		if ripple and ripple.Parent then ripple:Destroy() end
+	end)
+end
+
+-- ============================================================
+-- THEMES (12+ themes)
+-- ============================================================
+local function makeTheme(base)
+	return table.clone(base)
+end
+
 local DefaultTheme = {
 	Background = Color3.fromRGB(18, 18, 22),
-	Topbar = Color3.fromRGB(28, 28, 34),
+	Topbar = Color3.fromRGB(26, 26, 32),
 	ElementBackground = Color3.fromRGB(32, 32, 40),
 	ElementBackgroundHover = Color3.fromRGB(42, 42, 52),
 	TextColor = Color3.fromRGB(240, 240, 245),
 	SubTextColor = Color3.fromRGB(160, 160, 175),
-	Accent = Color3.fromRGB(99, 102, 241), -- Indigo
+	Accent = Color3.fromRGB(99, 102, 241),
 	AccentHover = Color3.fromRGB(129, 132, 255),
 	Success = Color3.fromRGB(34, 197, 94),
 	Warning = Color3.fromRGB(234, 179, 8),
@@ -83,13 +157,15 @@ local DefaultTheme = {
 	Shadow = Color3.fromRGB(0, 0, 0),
 	ToggleOn = Color3.fromRGB(99, 102, 241),
 	ToggleOff = Color3.fromRGB(60, 60, 75),
+	SliderFill = Color3.fromRGB(99, 102, 241),
+	SliderGrab = Color3.fromRGB(255, 255, 255),
 }
 
 Rayflide.Theme.Default = DefaultTheme
 Rayflide.Theme.Current = table.clone(DefaultTheme)
 
--- Themes
-Rayflide.Theme.Dark = DefaultTheme
+Rayflide.Theme.Dark = makeTheme(DefaultTheme)
+
 Rayflide.Theme.Light = {
 	Background = Color3.fromRGB(245, 245, 250),
 	Topbar = Color3.fromRGB(255, 255, 255),
@@ -106,6 +182,8 @@ Rayflide.Theme.Light = {
 	Shadow = Color3.fromRGB(0, 0, 0),
 	ToggleOn = Color3.fromRGB(79, 70, 229),
 	ToggleOff = Color3.fromRGB(200, 200, 215),
+	SliderFill = Color3.fromRGB(79, 70, 229),
+	SliderGrab = Color3.fromRGB(255, 255, 255),
 }
 
 Rayflide.Theme.Ocean = {
@@ -124,6 +202,8 @@ Rayflide.Theme.Ocean = {
 	Shadow = Color3.fromRGB(0, 0, 0),
 	ToggleOn = Color3.fromRGB(14, 165, 233),
 	ToggleOff = Color3.fromRGB(40, 70, 90),
+	SliderFill = Color3.fromRGB(14, 165, 233),
+	SliderGrab = Color3.fromRGB(255, 255, 255),
 }
 
 Rayflide.Theme.Crimson = {
@@ -142,9 +222,173 @@ Rayflide.Theme.Crimson = {
 	Shadow = Color3.fromRGB(0, 0, 0),
 	ToggleOn = Color3.fromRGB(225, 29, 72),
 	ToggleOff = Color3.fromRGB(60, 30, 35),
+	SliderFill = Color3.fromRGB(225, 29, 72),
+	SliderGrab = Color3.fromRGB(255, 255, 255),
 }
 
--- Notification System
+Rayflide.Theme.Neon = {
+	Background = Color3.fromRGB(10, 8, 20),
+	Topbar = Color3.fromRGB(18, 12, 35),
+	ElementBackground = Color3.fromRGB(22, 16, 42),
+	ElementBackgroundHover = Color3.fromRGB(30, 22, 55),
+	TextColor = Color3.fromRGB(240, 230, 255),
+	SubTextColor = Color3.fromRGB(170, 140, 220),
+	Accent = Color3.fromRGB(180, 60, 255),
+	AccentHover = Color3.fromRGB(210, 100, 255),
+	Success = Color3.fromRGB(80, 255, 160),
+	Warning = Color3.fromRGB(255, 220, 50),
+	Error = Color3.fromRGB(255, 60, 120),
+	Stroke = Color3.fromRGB(50, 35, 80),
+	Shadow = Color3.fromRGB(0, 0, 0),
+	ToggleOn = Color3.fromRGB(180, 60, 255),
+	ToggleOff = Color3.fromRGB(45, 35, 70),
+	SliderFill = Color3.fromRGB(180, 60, 255),
+	SliderGrab = Color3.fromRGB(255, 100, 255),
+}
+
+Rayflide.Theme.Midnight = {
+	Background = Color3.fromRGB(8, 10, 18),
+	Topbar = Color3.fromRGB(14, 18, 30),
+	ElementBackground = Color3.fromRGB(20, 26, 40),
+	ElementBackgroundHover = Color3.fromRGB(28, 36, 55),
+	TextColor = Color3.fromRGB(220, 230, 250),
+	SubTextColor = Color3.fromRGB(120, 140, 180),
+	Accent = Color3.fromRGB(80, 100, 240),
+	AccentHover = Color3.fromRGB(120, 140, 255),
+	Success = Color3.fromRGB(60, 200, 120),
+	Warning = Color3.fromRGB(240, 180, 60),
+	Error = Color3.fromRGB(240, 80, 80),
+	Stroke = Color3.fromRGB(40, 50, 75),
+	Shadow = Color3.fromRGB(0, 0, 0),
+	ToggleOn = Color3.fromRGB(80, 100, 240),
+	ToggleOff = Color3.fromRGB(40, 50, 75),
+	SliderFill = Color3.fromRGB(80, 100, 240),
+	SliderGrab = Color3.fromRGB(180, 200, 255),
+}
+
+Rayflide.Theme.Sunset = {
+	Background = Color3.fromRGB(30, 12, 8),
+	Topbar = Color3.fromRGB(45, 20, 12),
+	ElementBackground = Color3.fromRGB(55, 25, 15),
+	ElementBackgroundHover = Color3.fromRGB(70, 35, 22),
+	TextColor = Color3.fromRGB(255, 240, 225),
+	SubTextColor = Color3.fromRGB(210, 160, 120),
+	Accent = Color3.fromRGB(255, 120, 40),
+	AccentHover = Color3.fromRGB(255, 150, 70),
+	Success = Color3.fromRGB(100, 220, 100),
+	Warning = Color3.fromRGB(255, 200, 50),
+	Error = Color3.fromRGB(255, 80, 80),
+	Stroke = Color3.fromRGB(85, 40, 25),
+	Shadow = Color3.fromRGB(0, 0, 0),
+	ToggleOn = Color3.fromRGB(255, 120, 40),
+	ToggleOff = Color3.fromRGB(80, 40, 25),
+	SliderFill = Color3.fromRGB(255, 120, 40),
+	SliderGrab = Color3.fromRGB(255, 200, 150),
+}
+
+Rayflide.Theme.Emerald = {
+	Background = Color3.fromRGB(8, 25, 18),
+	Topbar = Color3.fromRGB(12, 35, 25),
+	ElementBackground = Color3.fromRGB(15, 45, 32),
+	ElementBackgroundHover = Color3.fromRGB(22, 58, 42),
+	TextColor = Color3.fromRGB(220, 255, 240),
+	SubTextColor = Color3.fromRGB(130, 210, 170),
+	Accent = Color3.fromRGB(16, 185, 129),
+	AccentHover = Color3.fromRGB(52, 211, 153),
+	Success = Color3.fromRGB(52, 211, 153),
+	Warning = Color3.fromRGB(250, 204, 21),
+	Error = Color3.fromRGB(248, 113, 113),
+	Stroke = Color3.fromRGB(30, 70, 50),
+	Shadow = Color3.fromRGB(0, 0, 0),
+	ToggleOn = Color3.fromRGB(16, 185, 129),
+	ToggleOff = Color3.fromRGB(35, 65, 50),
+	SliderFill = Color3.fromRGB(16, 185, 129),
+	SliderGrab = Color3.fromRGB(200, 255, 230),
+}
+
+Rayflide.Theme.Purple = {
+	Background = Color3.fromRGB(22, 12, 35),
+	Topbar = Color3.fromRGB(32, 18, 50),
+	ElementBackground = Color3.fromRGB(42, 24, 65),
+	ElementBackgroundHover = Color3.fromRGB(55, 32, 85),
+	TextColor = Color3.fromRGB(245, 235, 255),
+	SubTextColor = Color3.fromRGB(190, 160, 220),
+	Accent = Color3.fromRGB(168, 85, 247),
+	AccentHover = Color3.fromRGB(192, 120, 255),
+	Success = Color3.fromRGB(74, 222, 128),
+	Warning = Color3.fromRGB(250, 204, 21),
+	Error = Color3.fromRGB(248, 113, 113),
+	Stroke = Color3.fromRGB(70, 40, 100),
+	Shadow = Color3.fromRGB(0, 0, 0),
+	ToggleOn = Color3.fromRGB(168, 85, 247),
+	ToggleOff = Color3.fromRGB(60, 40, 85),
+	SliderFill = Color3.fromRGB(168, 85, 247),
+	SliderGrab = Color3.fromRGB(220, 190, 255),
+}
+
+Rayflide.Theme.Gold = {
+	Background = Color3.fromRGB(25, 20, 8),
+	Topbar = Color3.fromRGB(40, 32, 12),
+	ElementBackground = Color3.fromRGB(52, 42, 18),
+	ElementBackgroundHover = Color3.fromRGB(68, 55, 25),
+	TextColor = Color3.fromRGB(255, 248, 220),
+	SubTextColor = Color3.fromRGB(220, 190, 120),
+	Accent = Color3.fromRGB(234, 179, 8),
+	AccentHover = Color3.fromRGB(250, 204, 21),
+	Success = Color3.fromRGB(100, 220, 100),
+	Warning = Color3.fromRGB(250, 204, 21),
+	Error = Color3.fromRGB(255, 90, 90),
+	Stroke = Color3.fromRGB(80, 65, 25),
+	Shadow = Color3.fromRGB(0, 0, 0),
+	ToggleOn = Color3.fromRGB(234, 179, 8),
+	ToggleOff = Color3.fromRGB(75, 60, 25),
+	SliderFill = Color3.fromRGB(234, 179, 8),
+	SliderGrab = Color3.fromRGB(255, 240, 180),
+}
+
+Rayflide.Theme.Gray = {
+	Background = Color3.fromRGB(28, 28, 30),
+	Topbar = Color3.fromRGB(40, 40, 44),
+	ElementBackground = Color3.fromRGB(52, 52, 58),
+	ElementBackgroundHover = Color3.fromRGB(68, 68, 76),
+	TextColor = Color3.fromRGB(240, 240, 245),
+	SubTextColor = Color3.fromRGB(170, 170, 180),
+	Accent = Color3.fromRGB(180, 180, 200),
+	AccentHover = Color3.fromRGB(210, 210, 230),
+	Success = Color3.fromRGB(100, 220, 130),
+	Warning = Color3.fromRGB(230, 200, 80),
+	Error = Color3.fromRGB(230, 100, 100),
+	Stroke = Color3.fromRGB(80, 80, 90),
+	Shadow = Color3.fromRGB(0, 0, 0),
+	ToggleOn = Color3.fromRGB(180, 180, 200),
+	ToggleOff = Color3.fromRGB(70, 70, 80),
+	SliderFill = Color3.fromRGB(180, 180, 200),
+	SliderGrab = Color3.fromRGB(255, 255, 255),
+}
+
+Rayflide.Theme.Rose = {
+	Background = Color3.fromRGB(30, 15, 22),
+	Topbar = Color3.fromRGB(45, 22, 32),
+	ElementBackground = Color3.fromRGB(58, 30, 42),
+	ElementBackgroundHover = Color3.fromRGB(75, 40, 55),
+	TextColor = Color3.fromRGB(255, 235, 245),
+	SubTextColor = Color3.fromRGB(220, 160, 185),
+	Accent = Color3.fromRGB(244, 114, 182),
+	AccentHover = Color3.fromRGB(251, 146, 204),
+	Success = Color3.fromRGB(100, 220, 130),
+	Warning = Color3.fromRGB(250, 204, 21),
+	Error = Color3.fromRGB(248, 113, 113),
+	Stroke = Color3.fromRGB(95, 50, 68),
+	Shadow = Color3.fromRGB(0, 0, 0),
+	ToggleOn = Color3.fromRGB(244, 114, 182),
+	ToggleOff = Color3.fromRGB(75, 45, 60),
+	SliderFill = Color3.fromRGB(244, 114, 182),
+	SliderGrab = Color3.fromRGB(255, 200, 230),
+}
+
+-- ============================================================
+-- NOTIFICATIONS
+-- ============================================================
 local NotificationHolder
 local function EnsureNotificationHolder()
 	if NotificationHolder and NotificationHolder.Parent then return NotificationHolder end
@@ -159,8 +403,8 @@ local function EnsureNotificationHolder()
 	local frame = Create("Frame", {
 		Name = "Holder",
 		BackgroundTransparency = 1,
-		Size = UDim2.new(0, 320, 1, 0),
-		Position = UDim2.new(1, -340, 0, 20),
+		Size = UDim2.new(0, 340, 1, 0),
+		Position = UDim2.new(1, -360, 0, 20),
 		Parent = NotificationHolder,
 	})
 	Create("UIListLayout", {
@@ -177,7 +421,14 @@ function Rayflide:Notify(settings)
 	local title = settings.Title or "Notification"
 	local content = settings.Content or ""
 	local duration = settings.Duration or 5
-	local image = settings.Image
+	local notifType = settings.Type or "info"
+
+	local typeColors = {
+		info = Rayflide.Theme.Current.Accent,
+		success = Rayflide.Theme.Current.Success,
+		warning = Rayflide.Theme.Current.Warning,
+		error = Rayflide.Theme.Current.Error,
+	}
 
 	local holder = EnsureNotificationHolder().Holder
 
@@ -188,20 +439,16 @@ function Rayflide:Notify(settings)
 		ClipsDescendants = true,
 		Parent = holder,
 	})
-	Create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = notif })
-	Create("UIStroke", {
-		Color = Rayflide.Theme.Current.Stroke,
-		Thickness = 1,
-		Parent = notif,
-	})
+	AddCorner(notif, 10)
+	AddStroke(notif, Rayflide.Theme.Current.Stroke, 1)
 
 	local accent = Create("Frame", {
-		BackgroundColor3 = Rayflide.Theme.Current.Accent,
+		BackgroundColor3 = typeColors[notifType] or Rayflide.Theme.Current.Accent,
 		Size = UDim2.new(0, 4, 1, 0),
 		BorderSizePixel = 0,
 		Parent = notif,
 	})
-	Create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = accent })
+	AddCorner(accent, 10)
 
 	local titleLabel = Create("TextLabel", {
 		BackgroundTransparency = 1,
@@ -229,27 +476,25 @@ function Rayflide:Notify(settings)
 		Parent = notif,
 	})
 
-	-- Auto size
-	local textSize = game:GetService("TextService"):GetTextSize(content, 13, Enum.Font.Gotham, Vector2.new(270, 1000))
+	local textSize = TextService:GetTextSize(content, 13, Enum.Font.Gotham, Vector2.new(280, 1000))
 	local height = math.max(60, 45 + textSize.Y)
 	contentLabel.Size = UDim2.new(1, -30, 0, textSize.Y + 5)
-
 	notif.Size = UDim2.new(1, 0, 0, height)
 
-	-- Animate in
 	notif.BackgroundTransparency = 1
 	titleLabel.TextTransparency = 1
 	contentLabel.TextTransparency = 1
-	Tween(notif, { BackgroundTransparency = 0 }, 0.3)
+	notif.Position = UDim2.new(1, 340, 0, 0)
+	Tween(notif, { BackgroundTransparency = 0, Position = UDim2.new(0, 0, 0, 0) }, 0.3)
 	Tween(titleLabel, { TextTransparency = 0 }, 0.3)
 	Tween(contentLabel, { TextTransparency = 0 }, 0.3)
 
 	task.delay(duration, function()
 		if notif and notif.Parent then
-			Tween(notif, { BackgroundTransparency = 1 }, 0.25)
-			Tween(titleLabel, { TextTransparency = 1 }, 0.25)
-			Tween(contentLabel, { TextTransparency = 1 }, 0.25)
-			task.wait(0.3)
+			Tween(notif, { BackgroundTransparency = 1, Position = UDim2.new(1, 340, 0, 0) }, 0.3)
+			Tween(titleLabel, { TextTransparency = 1 }, 0.3)
+			Tween(contentLabel, { TextTransparency = 1 }, 0.3)
+			task.wait(0.35)
 			notif:Destroy()
 		end
 	end)
@@ -257,7 +502,152 @@ function Rayflide:Notify(settings)
 	return notif
 end
 
--- Main CreateWindow
+-- ============================================================
+-- COLOR PICKER MODAL
+-- ============================================================
+local function OpenColorPicker(parent, startColor, callback)
+	local modal = Create("Frame", {
+		BackgroundColor3 = Rayflide.Theme.Current.ElementBackground,
+		Size = UDim2.fromOffset(260, 320),
+		Position = UDim2.new(0.5, -130, 0.5, -160),
+		Parent = parent,
+		ZIndex = 50,
+	})
+	AddCorner(modal, 12)
+	AddStroke(modal, Rayflide.Theme.Current.Stroke, 1)
+
+	local title = Create("TextLabel", {
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 12, 0, 8),
+		Size = UDim2.new(1, -50, 0, 24),
+		Font = Enum.Font.GothamBold,
+		Text = "Pick Color",
+		TextColor3 = Rayflide.Theme.Current.TextColor,
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = modal,
+	})
+
+	local closeBtn = Create("TextButton", {
+		BackgroundTransparency = 1,
+		Position = UDim2.new(1, -32, 0, 8),
+		Size = UDim2.fromOffset(24, 24),
+		Text = "✕",
+		Font = Enum.Font.GothamBold,
+		TextColor3 = Rayflide.Theme.Current.SubTextColor,
+		TextSize = 14,
+		Parent = modal,
+	})
+	closeBtn.MouseButton1Click:Connect(function() modal:Destroy() end)
+
+	-- HSV sliders
+	local h, s, v = startColor:ToHSV()
+	local function updatePreview()
+		local color = Color3.fromHSV(h, s, v)
+		preview.BackgroundColor3 = color
+		callback(color)
+	end
+
+	local preview = Create("Frame", {
+		BackgroundColor3 = startColor,
+		Position = UDim2.new(0, 12, 0, 40),
+		Size = UDim2.new(1, -24, 0, 60),
+		Parent = modal,
+	})
+	AddCorner(preview, 8)
+
+	local function makeHSVSlider(name, y, value, max, onChange)
+		local label = Create("TextLabel", {
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0, 12, 0, y),
+			Size = UDim2.new(0, 20, 0, 18),
+			Font = Enum.Font.GothamMedium,
+			Text = name,
+			TextColor3 = Rayflide.Theme.Current.TextColor,
+			TextSize = 13,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Parent = modal,
+		})
+		local valLabel = Create("TextLabel", {
+			BackgroundTransparency = 1,
+			Position = UDim2.new(1, -60, 0, y),
+			Size = UDim2.new(0, 50, 0, 18),
+			Font = Enum.Font.Gotham,
+			Text = tostring(math.floor(value * max)),
+			TextColor3 = Rayflide.Theme.Current.SubTextColor,
+			TextSize = 12,
+			TextXAlignment = Enum.TextXAlignment.Right,
+			Parent = modal,
+		})
+		local barBg = Create("Frame", {
+			BackgroundColor3 = Rayflide.Theme.Current.ToggleOff,
+			Position = UDim2.new(0, 12, 0, y + 22),
+			Size = UDim2.new(1, -24, 0, 8),
+			Parent = modal,
+		})
+		AddCorner(barBg, 999)
+		local barFill = Create("Frame", {
+			BackgroundColor3 = Rayflide.Theme.Current.Accent,
+			Size = UDim2.new(value, 0, 1, 0),
+			Parent = barBg,
+		})
+		AddCorner(barFill, 999)
+		local grab = Create("Frame", {
+			BackgroundColor3 = Color3.new(1,1,1),
+			Size = UDim2.fromOffset(14, 14),
+			Position = UDim2.new(value, -7, 0.5, -7),
+			Parent = barBg,
+		})
+		AddCorner(grab, 999)
+		local sliding = false
+		local function update(x)
+			local rel = math.clamp((x - barBg.AbsolutePosition.X) / barBg.AbsoluteSize.X, 0, 1)
+			barFill.Size = UDim2.new(rel, 0, 1, 0)
+			grab.Position = UDim2.new(rel, -7, 0.5, -7)
+			valLabel.Text = tostring(math.floor(rel * max))
+			onChange(rel)
+		end
+		barBg.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				sliding = true
+				update(input.Position.X)
+			end
+		end)
+		local con
+		con = UserInputService.InputChanged:Connect(function(input)
+			if sliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+				update(input.Position.X)
+			end
+		end)
+		UserInputService.InputEnded:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				sliding = false
+			end
+		end)
+	end
+
+	makeHSVSlider("H", 112, h, 360, function(rel) h = rel; updatePreview() end)
+	makeHSVSlider("S", 168, s, 100, function(rel) s = rel; updatePreview() end)
+	makeHSVSlider("V", 224, v, 100, function(rel) v = rel; updatePreview() end)
+
+	local doneBtn = Create("TextButton", {
+		BackgroundColor3 = Rayflide.Theme.Current.Accent,
+		Position = UDim2.new(0, 12, 1, -46),
+		Size = UDim2.new(1, -24, 0, 34),
+		Font = Enum.Font.GothamBold,
+		Text = "Done",
+		TextColor3 = Color3.new(1,1,1),
+		TextSize = 13,
+		AutoButtonColor = false,
+		Parent = modal,
+	})
+	AddCorner(doneBtn, 8)
+	doneBtn.MouseButton1Click:Connect(function() modal:Destroy() end)
+end
+
+-- ============================================================
+-- MAIN WINDOW
+-- ============================================================
 function Rayflide:CreateWindow(settings)
 	settings = settings or {}
 	local windowName = settings.Name or "Rayflide Window"
@@ -267,6 +657,8 @@ function Rayflide:CreateWindow(settings)
 	local configSaving = settings.ConfigurationSaving or { Enabled = false }
 	local keySystem = settings.KeySystem or false
 	local keySettings = settings.KeySettings or {}
+	local defaultSize = settings.Size or Rayflide.Defaults.WindowSize
+	local resizable = settings.Resizable ~= false
 
 	if Rayflide.Theme[themeName] then
 		Rayflide.Theme.Current = table.clone(Rayflide.Theme[themeName])
@@ -281,34 +673,29 @@ function Rayflide:CreateWindow(settings)
 	})
 	ProtectGui(ScreenGui)
 
-	-- Main Frame
 	local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-	local mainSize = isMobile and UDim2.new(0, 340, 0, 420) or UDim2.new(0, 520, 0, 480)
 
+	-- Main Frame
 	local Main = Create("Frame", {
 		Name = "Main",
 		BackgroundColor3 = Rayflide.Theme.Current.Background,
-		Size = mainSize,
-		Position = UDim2.new(0.5, -mainSize.X.Offset/2, 0.5, -mainSize.Y.Offset/2),
+		Size = defaultSize,
+		Position = UDim2.new(0.5, -defaultSize.X.Offset/2, 0.5, -defaultSize.Y.Offset/2),
 		ClipsDescendants = true,
 		Parent = ScreenGui,
 	})
-	Create("UICorner", { CornerRadius = UDim.new(0, 12), Parent = Main })
-	Create("UIStroke", {
-		Color = Rayflide.Theme.Current.Stroke,
-		Thickness = 1.2,
-		Parent = Main,
-	})
+	AddCorner(Main, 12)
+	AddStroke(Main, Rayflide.Theme.Current.Stroke, 1.2)
 
 	-- Shadow
 	local Shadow = Create("ImageLabel", {
 		Name = "Shadow",
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 40, 1, 40),
-		Position = UDim2.new(0, -20, 0, -20),
+		Size = UDim2.new(1, 60, 1, 60),
+		Position = UDim2.new(0, -30, 0, -30),
 		Image = "rbxassetid://6014261993",
-		ImageColor3 = Color3.new(0, 0, 0),
-		ImageTransparency = 0.6,
+		ImageColor3 = Color3.new(0,0,0),
+		ImageTransparency = 0.5,
 		ScaleType = Enum.ScaleType.Slice,
 		SliceCenter = Rect.new(49, 49, 450, 450),
 		ZIndex = 0,
@@ -316,15 +703,15 @@ function Rayflide:CreateWindow(settings)
 	})
 
 	-- Topbar
+	local topbarHeight = 42
 	local Topbar = Create("Frame", {
 		Name = "Topbar",
 		BackgroundColor3 = Rayflide.Theme.Current.Topbar,
-		Size = UDim2.new(1, 0, 0, 42),
+		Size = UDim2.new(1, 0, 0, topbarHeight),
 		BorderSizePixel = 0,
 		Parent = Main,
 	})
-	Create("UICorner", { CornerRadius = UDim.new(0, 12), Parent = Topbar })
-	-- Fix bottom corners of topbar
+	AddCorner(Topbar, 12)
 	Create("Frame", {
 		BackgroundColor3 = Rayflide.Theme.Current.Topbar,
 		Size = UDim2.new(1, 0, 0, 15),
@@ -346,29 +733,42 @@ function Rayflide:CreateWindow(settings)
 	})
 
 	-- Window Controls
-	local function MakeControl(text, color, pos)
-		local btn = Create("TextButton", {
-			BackgroundColor3 = color,
-			Size = UDim2.new(0, 14, 0, 14),
-			Position = pos,
-			Text = "",
-			AutoButtonColor = false,
-			Parent = Topbar,
-		})
-		Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = btn })
-		return btn
-	end
+	local CloseBtn = Create("TextButton", {
+		BackgroundColor3 = Color3.fromRGB(255, 95, 87),
+		Size = UDim2.new(0, 14, 0, 14),
+		Position = UDim2.new(1, -22, 0.5, -7),
+		Text = "",
+		AutoButtonColor = false,
+		Parent = Topbar,
+	})
+	AddCorner(CloseBtn, 999)
 
-	local CloseBtn = MakeControl("", Color3.fromRGB(255, 95, 87), UDim2.new(1, -22, 0.5, -7))
-	local MinBtn = MakeControl("", Color3.fromRGB(255, 189, 46), UDim2.new(1, -42, 0.5, -7))
-	local MaxBtn = MakeControl("", Color3.fromRGB(40, 200, 64), UDim2.new(1, -62, 0.5, -7))
+	local MinBtn = Create("TextButton", {
+		BackgroundColor3 = Color3.fromRGB(255, 189, 46),
+		Size = UDim2.new(0, 14, 0, 14),
+		Position = UDim2.new(1, -42, 0.5, -7),
+		Text = "",
+		AutoButtonColor = false,
+		Parent = Topbar,
+	})
+	AddCorner(MinBtn, 999)
+
+	local MaxBtn = Create("TextButton", {
+		BackgroundColor3 = Color3.fromRGB(40, 200, 64),
+		Size = UDim2.new(0, 14, 0, 14),
+		Position = UDim2.new(1, -62, 0.5, -7),
+		Text = "",
+		AutoButtonColor = false,
+		Parent = Topbar,
+	})
+	AddCorner(MaxBtn, 999)
 
 	-- Tab Container
 	local TabContainer = Create("Frame", {
 		Name = "TabContainer",
 		BackgroundTransparency = 1,
-		Size = UDim2.new(0, isMobile and 70 or 140, 1, -42),
-		Position = UDim2.new(0, 0, 0, 42),
+		Size = UDim2.new(0, isMobile and 70 or 150, 1, -topbarHeight),
+		Position = UDim2.new(0, 0, 0, topbarHeight),
 		Parent = Main,
 	})
 
@@ -388,18 +788,14 @@ function Rayflide:CreateWindow(settings)
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = TabList,
 	})
-	Create("UIPadding", {
-		PaddingTop = UDim.new(0, 10),
-		PaddingBottom = UDim.new(0, 10),
-		Parent = TabList,
-	})
+	AddPadding(TabList, { 10, 0, 10, 0 })
 
-	-- Content Area
+	-- Content
 	local Content = Create("Frame", {
 		Name = "Content",
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, isMobile and -70 or -140, 1, -42),
-		Position = UDim2.new(0, isMobile and 70 or 140, 0, 42),
+		Size = UDim2.new(1, isMobile and -70 or -150, 1, -topbarHeight),
+		Position = UDim2.new(0, isMobile and 70 or 150, 0, topbarHeight),
 		ClipsDescendants = true,
 		Parent = Main,
 	})
@@ -427,19 +823,73 @@ function Rayflide:CreateWindow(settings)
 		end
 	end)
 
-	-- Minimize / Close
+	-- Resize handle
+	if resizable then
+		local resizeHandle = Create("TextButton", {
+			BackgroundTransparency = 1,
+			Size = UDim2.fromOffset(20, 20),
+			Position = UDim2.new(1, -20, 1, -20),
+			Text = "◢",
+			Font = Enum.Font.GothamBold,
+			TextColor3 = Rayflide.Theme.Current.SubTextColor,
+			TextSize = 14,
+			Parent = Main,
+		})
+		local resizing = false
+		local resizeStart, resizeStartSize
+		resizeHandle.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				resizing = true
+				resizeStart = input.Position
+				resizeStartSize = Main.Size
+			end
+		end)
+		UserInputService.InputChanged:Connect(function(input)
+			if resizing and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+				local delta = input.Position - resizeStart
+				local newW = math.clamp(resizeStartSize.X.Offset + delta.X, Rayflide.Defaults.MinWindowSize.X, Rayflide.Defaults.MaxWindowSize.X)
+				local newH = math.clamp(resizeStartSize.Y.Offset + delta.Y, Rayflide.Defaults.MinWindowSize.Y, Rayflide.Defaults.MaxWindowSize.Y)
+				Main.Size = UDim2.fromOffset(newW, newH)
+			end
+		end)
+		UserInputService.InputEnded:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				resizing = false
+			end
+		end)
+	end
+
+	-- Minimize / Close / Maximize
 	local minimized = false
+	local maximized = false
+	local originalSize = defaultSize
+	local originalPos = Main.Position
+
 	MinBtn.MouseButton1Click:Connect(function()
 		minimized = not minimized
 		if minimized then
-			Tween(Main, { Size = UDim2.new(0, mainSize.X.Offset, 0, 42) }, 0.3)
+			Tween(Main, { Size = UDim2.new(0, defaultSize.X.Offset, 0, topbarHeight) }, 0.3)
 		else
-			Tween(Main, { Size = mainSize }, 0.3)
+			Tween(Main, { Size = maximized and UDim2.fromScale(0.9, 0.9) or defaultSize }, 0.3)
+		end
+	end)
+
+	MaxBtn.MouseButton1Click:Connect(function()
+		maximized = not maximized
+		if maximized then
+			originalSize = Main.Size
+			originalPos = Main.Position
+			Main.Position = UDim2.new(0.5, 0, 0.5, 0)
+			Main.AnchorPoint = Vector2.new(0.5, 0.5)
+			Tween(Main, { Size = UDim2.fromScale(0.9, 0.9) }, 0.3)
+		else
+			Main.AnchorPoint = Vector2.new(0, 0)
+			Tween(Main, { Size = originalSize, Position = originalPos }, 0.3)
 		end
 	end)
 
 	CloseBtn.MouseButton1Click:Connect(function()
-		Tween(Main, { Size = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 1 }, 0.25)
+		Tween(Main, { Size = UDim2.fromOffset(0, 0), BackgroundTransparency = 1 }, 0.25)
 		task.wait(0.3)
 		ScreenGui:Destroy()
 	end)
@@ -452,6 +902,9 @@ function Rayflide:CreateWindow(settings)
 		ScreenGui = ScreenGui,
 	}
 
+	-- ============================================================
+	-- TAB CREATION
+	-- ============================================================
 	function Window:CreateTab(name, icon)
 		name = name or "Tab"
 		local tabButton = Create("TextButton", {
@@ -462,7 +915,7 @@ function Rayflide:CreateWindow(settings)
 			AutoButtonColor = false,
 			Parent = TabList,
 		})
-		Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = tabButton })
+		AddCorner(tabButton, 8)
 
 		local tabIcon = Create("ImageLabel", {
 			BackgroundTransparency = 1,
@@ -503,14 +956,7 @@ function Rayflide:CreateWindow(settings)
 			SortOrder = Enum.SortOrder.LayoutOrder,
 			Parent = page,
 		})
-		Create("UIPadding", {
-			PaddingTop = UDim.new(0, 12),
-			PaddingBottom = UDim.new(0, 12),
-			PaddingLeft = UDim.new(0, 12),
-			PaddingRight = UDim.new(0, 12),
-			Parent = page,
-		})
-
+		AddPadding(page, { 12, 12, 12, 12 })
 		pageLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 			page.CanvasSize = UDim2.new(0, 0, 0, pageLayout.AbsoluteContentSize.Y + 24)
 		end)
@@ -535,24 +981,24 @@ function Rayflide:CreateWindow(settings)
 			end
 			page.Visible = true
 			Tween(tabButton, { BackgroundColor3 = Rayflide.Theme.Current.Accent }, 0.2)
-			tabLabel.TextColor3 = Color3.new(1, 1, 1)
-			tabIcon.ImageColor3 = Color3.new(1, 1, 1)
+			tabLabel.TextColor3 = Color3.new(1,1,1)
+			tabIcon.ImageColor3 = Color3.new(1,1,1)
 			Window.SelectedTab = Tab
 		end
+		tabButton.MouseButton1Click:Connect(function()
+			Select()
+			Ripple(tabButton, Rayflide.Theme.Current.Accent)
+		end)
 
-		tabButton.MouseButton1Click:Connect(Select)
-
-		-- First tab auto select
 		if #Window.Tabs == 0 then
 			task.defer(Select)
 		end
 
 		table.insert(Window.Tabs, Tab)
 
-		-- Update canvas
-		TabList.CanvasSize = UDim2.new(0, 0, 0, TabList.UIListLayout.AbsoluteContentSize.Y + 20)
-
-		-- Element creators
+		-- ============================================================
+		-- ELEMENT: SECTION
+		-- ============================================================
 		function Tab:CreateSection(sectionName)
 			local section = Create("Frame", {
 				BackgroundTransparency = 1,
@@ -565,33 +1011,45 @@ function Rayflide:CreateWindow(settings)
 				Font = Enum.Font.GothamBold,
 				Text = sectionName or "Section",
 				TextColor3 = Rayflide.Theme.Current.Accent,
-				TextSize = 14,
+				TextSize = 13,
 				TextXAlignment = Enum.TextXAlignment.Left,
 				Parent = section,
 			})
 			return {
-				Set = function(_, text)
-					label.Text = text
-				end
+				Set = function(_, text) label.Text = text end,
 			}
 		end
 
+		-- ============================================================
+		-- ELEMENT: BUTTON (redesigned)
+		-- ============================================================
 		function Tab:CreateButton(opts)
 			opts = opts or {}
+			local height = opts.Height or 42
 			local btnFrame = Create("TextButton", {
 				BackgroundColor3 = Rayflide.Theme.Current.ElementBackground,
-				Size = UDim2.new(1, 0, 0, 40),
+				Size = UDim2.new(1, 0, 0, height),
 				Text = "",
 				AutoButtonColor = false,
 				Parent = page,
 			})
-			Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = btnFrame })
-			Create("UIStroke", { Color = Rayflide.Theme.Current.Stroke, Thickness = 1, Parent = btnFrame })
+			AddCorner(btnFrame, 8)
+			AddStroke(btnFrame, Rayflide.Theme.Current.Stroke, 1)
+
+			local icon = Create("ImageLabel", {
+				BackgroundTransparency = 1,
+				Position = UDim2.new(0, 12, 0.5, -8),
+				Size = UDim2.fromOffset(16, 16),
+				Image = opts.Icon and (typeof(opts.Icon) == "number" and ("rbxassetid://"..opts.Icon) or opts.Icon) or "",
+				ImageColor3 = Rayflide.Theme.Current.SubTextColor,
+				Visible = opts.Icon ~= nil,
+				Parent = btnFrame,
+			})
 
 			local btnLabel = Create("TextLabel", {
 				BackgroundTransparency = 1,
-				Size = UDim2.new(1, -20, 1, 0),
-				Position = UDim2.new(0, 12, 0, 0),
+				Position = UDim2.new(0, opts.Icon and 36 or 14, 0, 0),
+				Size = UDim2.new(1, opts.Icon and -48 or -28, 1, 0),
 				Font = Enum.Font.GothamMedium,
 				Text = opts.Name or "Button",
 				TextColor3 = Rayflide.Theme.Current.TextColor,
@@ -607,9 +1065,8 @@ function Rayflide:CreateWindow(settings)
 				Tween(btnFrame, { BackgroundColor3 = Rayflide.Theme.Current.ElementBackground }, 0.15)
 			end)
 			btnFrame.MouseButton1Click:Connect(function()
-				if opts.Callback then
-					task.spawn(opts.Callback)
-				end
+				Ripple(btnFrame, Rayflide.Theme.Current.Accent)
+				if opts.Callback then task.spawn(opts.Callback) end
 			end)
 
 			return {
@@ -617,6 +1074,9 @@ function Rayflide:CreateWindow(settings)
 			}
 		end
 
+		-- ============================================================
+		-- ELEMENT: TOGGLE (improved)
+		-- ============================================================
 		function Tab:CreateToggle(opts)
 			opts = opts or {}
 			local flag = opts.Flag
@@ -628,8 +1088,8 @@ function Rayflide:CreateWindow(settings)
 				Size = UDim2.new(1, 0, 0, 42),
 				Parent = page,
 			})
-			Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = toggleFrame })
-			Create("UIStroke", { Color = Rayflide.Theme.Current.Stroke, Thickness = 1, Parent = toggleFrame })
+			AddCorner(toggleFrame, 8)
+			AddStroke(toggleFrame, Rayflide.Theme.Current.Stroke, 1)
 
 			local label = Create("TextLabel", {
 				BackgroundTransparency = 1,
@@ -645,26 +1105,26 @@ function Rayflide:CreateWindow(settings)
 
 			local switchBg = Create("Frame", {
 				BackgroundColor3 = current and Rayflide.Theme.Current.ToggleOn or Rayflide.Theme.Current.ToggleOff,
-				Size = UDim2.new(0, 42, 0, 24),
-				Position = UDim2.new(1, -54, 0.5, -12),
+				Size = UDim2.new(0, 44, 0, 24),
+				Position = UDim2.new(1, -56, 0.5, -12),
 				Parent = toggleFrame,
 			})
-			Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = switchBg })
+			AddCorner(switchBg, 999)
 
 			local circle = Create("Frame", {
-				BackgroundColor3 = Color3.new(1, 1, 1),
+				BackgroundColor3 = Color3.new(1,1,1),
 				Size = UDim2.new(0, 18, 0, 18),
 				Position = current and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9),
 				Parent = switchBg,
 			})
-			Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = circle })
+			AddCorner(circle, 999)
 
-			local function Set(value)
+			local function Set(value, skipCallback)
 				current = value
 				if flag then Rayflide.Flags[flag] = value end
 				Tween(switchBg, { BackgroundColor3 = value and Rayflide.Theme.Current.ToggleOn or Rayflide.Theme.Current.ToggleOff }, 0.2)
 				Tween(circle, { Position = value and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9) }, 0.2)
-				if opts.Callback then
+				if not skipCallback and opts.Callback then
 					task.spawn(opts.Callback, value)
 				end
 			end
@@ -685,25 +1145,30 @@ function Rayflide:CreateWindow(settings)
 			}
 		end
 
+		-- ============================================================
+		-- ELEMENT: SLIDER (COMPLETELY REDESIGNED with grab handle)
+		-- ============================================================
 		function Tab:CreateSlider(opts)
 			opts = opts or {}
-			local min, max = (opts.Range and opts.Range[1]) or 0, (opts.Range and opts.Range[2]) or 100
+			local min = (opts.Range and opts.Range[1]) or 0
+			local max = (opts.Range and opts.Range[2]) or 100
 			local increment = opts.Increment or 1
 			local current = opts.CurrentValue or min
 			local flag = opts.Flag
+			local suffix = opts.Suffix or ""
 			if flag then Rayflide.Flags[flag] = current end
 
 			local sliderFrame = Create("Frame", {
 				BackgroundColor3 = Rayflide.Theme.Current.ElementBackground,
-				Size = UDim2.new(1, 0, 0, 58),
+				Size = UDim2.new(1, 0, 0, 60),
 				Parent = page,
 			})
-			Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = sliderFrame })
-			Create("UIStroke", { Color = Rayflide.Theme.Current.Stroke, Thickness = 1, Parent = sliderFrame })
+			AddCorner(sliderFrame, 8)
+			AddStroke(sliderFrame, Rayflide.Theme.Current.Stroke, 1)
 
 			local label = Create("TextLabel", {
 				BackgroundTransparency = 1,
-				Position = UDim2.new(0, 12, 0, 6),
+				Position = UDim2.new(0, 14, 0, 8),
 				Size = UDim2.new(0.6, 0, 0, 18),
 				Font = Enum.Font.GothamMedium,
 				Text = opts.Name or "Slider",
@@ -713,48 +1178,80 @@ function Rayflide:CreateWindow(settings)
 				Parent = sliderFrame,
 			})
 
+			-- Value pill
+			local valuePill = Create("Frame", {
+				BackgroundColor3 = Rayflide.Theme.Current.Accent,
+				Position = UDim2.new(1, -72, 0, 6),
+				Size = UDim2.fromOffset(58, 22),
+				Parent = sliderFrame,
+			})
+			AddCorner(valuePill, 999)
+
 			local valueLabel = Create("TextLabel", {
 				BackgroundTransparency = 1,
-				Position = UDim2.new(0.6, 0, 0, 6),
-				Size = UDim2.new(0.4, -12, 0, 18),
-				Font = Enum.Font.Gotham,
-				Text = tostring(current) .. (opts.Suffix or ""),
-				TextColor3 = Rayflide.Theme.Current.SubTextColor,
-				TextSize = 13,
-				TextXAlignment = Enum.TextXAlignment.Right,
-				Parent = sliderFrame,
+				Size = UDim2.new(1, 0, 1, 0),
+				Font = Enum.Font.GothamBold,
+				Text = tostring(current) .. suffix,
+				TextColor3 = Color3.new(1,1,1),
+				TextSize = 12,
+				Parent = valuePill,
 			})
 
-			local barBg = Create("Frame", {
+			-- Track
+			local trackBg = Create("Frame", {
 				BackgroundColor3 = Rayflide.Theme.Current.ToggleOff,
-				Size = UDim2.new(1, -24, 0, 6),
-				Position = UDim2.new(0, 12, 0, 36),
+				Size = UDim2.new(1, -28, 0, 6),
+				Position = UDim2.new(0, 14, 0, 40),
 				Parent = sliderFrame,
 			})
-			Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = barBg })
+			AddCorner(trackBg, 999)
 
-			local barFill = Create("Frame", {
-				BackgroundColor3 = Rayflide.Theme.Current.Accent,
+			local fill = Create("Frame", {
+				BackgroundColor3 = Rayflide.Theme.Current.SliderFill or Rayflide.Theme.Current.Accent,
 				Size = UDim2.new((current - min) / (max - min), 0, 1, 0),
-				Parent = barBg,
+				Parent = trackBg,
 			})
-			Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = barFill })
+			AddCorner(fill, 999)
 
-			local function Set(val)
+			-- Grab handle
+			local grab = Create("Frame", {
+				BackgroundColor3 = Rayflide.Theme.Current.SliderGrab or Color3.new(1,1,1),
+				Size = UDim2.fromOffset(16, 16),
+				Position = UDim2.new((current - min) / (max - min), -8, 0.5, -8),
+				Parent = trackBg,
+			})
+			AddCorner(grab, 999)
+			AddStroke(grab, Rayflide.Theme.Current.Accent, 2)
+
+			local function Set(val, skipCallback)
 				val = math.clamp(Round(val / increment) * increment, min, max)
 				current = val
 				if flag then Rayflide.Flags[flag] = val end
-				barFill.Size = UDim2.new((val - min) / (max - min), 0, 1, 0)
-				valueLabel.Text = tostring(val) .. (opts.Suffix or "")
-				if opts.Callback then
+				local rel = (val - min) / (max - min)
+				barFillSize = rel
+				fill.Size = UDim2.new(rel, 0, 1, 0)
+				grab.Position = UDim2.new(rel, -8, 0.5, -8)
+				valueLabel.Text = tostring(val) .. suffix
+				if not skipCallback and opts.Callback then
 					task.spawn(opts.Callback, val)
 				end
 			end
 
 			local sliding = false
-			barBg.InputBegan:Connect(function(input)
+			local function update(x)
+				local rel = math.clamp((x - trackBg.AbsolutePosition.X) / trackBg.AbsoluteSize.X, 0, 1)
+				Set(min + (max - min) * rel)
+			end
+
+			trackBg.InputBegan:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 					sliding = true
+					update(input.Position.X)
+				end
+			end)
+			UserInputService.InputChanged:Connect(function(input)
+				if sliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+					update(input.Position.X)
 				end
 			end)
 			UserInputService.InputEnded:Connect(function(input)
@@ -762,16 +1259,13 @@ function Rayflide:CreateWindow(settings)
 					sliding = false
 				end
 			end)
-			UserInputService.InputChanged:Connect(function(input)
-				if sliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-					local rel = math.clamp((input.Position.X - barBg.AbsolutePosition.X) / barBg.AbsoluteSize.X, 0, 1)
-					Set(min + (max - min) * rel)
-				end
-			end)
 
 			return { Set = Set, Get = function() return current end }
 		end
 
+		-- ============================================================
+		-- ELEMENT: INPUT
+		-- ============================================================
 		function Tab:CreateInput(opts)
 			opts = opts or {}
 			local flag = opts.Flag
@@ -783,8 +1277,8 @@ function Rayflide:CreateWindow(settings)
 				Size = UDim2.new(1, 0, 0, 42),
 				Parent = page,
 			})
-			Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = inputFrame })
-			Create("UIStroke", { Color = Rayflide.Theme.Current.Stroke, Thickness = 1, Parent = inputFrame })
+			AddCorner(inputFrame, 8)
+			AddStroke(inputFrame, Rayflide.Theme.Current.Stroke, 1)
 
 			local label = Create("TextLabel", {
 				BackgroundTransparency = 1,
@@ -811,14 +1305,13 @@ function Rayflide:CreateWindow(settings)
 				ClearTextOnFocus = false,
 				Parent = inputFrame,
 			})
-			Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = box })
+			AddCorner(box, 6)
+			AddStroke(box, Rayflide.Theme.Current.Stroke, 1)
 
-			box.FocusLost:Connect(function(enter)
+			box.FocusLost:Connect(function()
 				current = box.Text
 				if flag then Rayflide.Flags[flag] = current end
-				if opts.Callback then
-					task.spawn(opts.Callback, current)
-				end
+				if opts.Callback then task.spawn(opts.Callback, current) end
 			end)
 
 			return {
@@ -831,13 +1324,16 @@ function Rayflide:CreateWindow(settings)
 			}
 		end
 
+		-- ============================================================
+		-- ELEMENT: DROPDOWN (with search)
+		-- ============================================================
 		function Tab:CreateDropdown(opts)
 			opts = opts or {}
 			local options = opts.Options or { "Option 1", "Option 2" }
 			local current = opts.CurrentOption or options[1]
 			local flag = opts.Flag
-			if flag then Rayflide.Flags[flag] = current end
 			local multi = opts.MultipleOptions or false
+			if flag then Rayflide.Flags[flag] = current end
 
 			local dropFrame = Create("Frame", {
 				BackgroundColor3 = Rayflide.Theme.Current.ElementBackground,
@@ -845,8 +1341,8 @@ function Rayflide:CreateWindow(settings)
 				ClipsDescendants = true,
 				Parent = page,
 			})
-			Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = dropFrame })
-			Create("UIStroke", { Color = Rayflide.Theme.Current.Stroke, Thickness = 1, Parent = dropFrame })
+			AddCorner(dropFrame, 8)
+			AddStroke(dropFrame, Rayflide.Theme.Current.Stroke, 1)
 
 			local label = Create("TextLabel", {
 				BackgroundTransparency = 1,
@@ -885,11 +1381,9 @@ function Rayflide:CreateWindow(settings)
 			})
 
 			local open = false
-			local optionButtons = {}
-
 			local function Toggle()
 				open = not open
-				local targetHeight = open and (42 + #options * 32 + 8) or 42
+				local targetHeight = open and (42 + #options * 32 + 16) or 42
 				Tween(dropFrame, { Size = UDim2.new(1, 0, 0, targetHeight) }, 0.25)
 				arrow.Text = open and "▴" or "▾"
 			end
@@ -902,22 +1396,73 @@ function Rayflide:CreateWindow(settings)
 			})
 			clickArea.MouseButton1Click:Connect(Toggle)
 
+			-- Search box
+			local searchBox = Create("TextBox", {
+				BackgroundColor3 = Rayflide.Theme.Current.Background,
+				Position = UDim2.new(0, 8, 0, 46),
+				Size = UDim2.new(1, -16, 0, 26),
+				Font = Enum.Font.Gotham,
+				Text = "",
+				PlaceholderText = "Search...",
+				TextColor3 = Rayflide.Theme.Current.TextColor,
+				PlaceholderColor3 = Rayflide.Theme.Current.SubTextColor,
+				TextSize = 12,
+				ClearTextOnFocus = false,
+				Parent = dropFrame,
+			})
+			AddCorner(searchBox, 6)
+
+			local optionsHolder = Create("ScrollingFrame", {
+				BackgroundTransparency = 1,
+				Position = UDim2.new(0, 8, 0, 80),
+				Size = UDim2.new(1, -16, 0, 0),
+				CanvasSize = UDim2.new(0, 0, 0, 0),
+				ScrollBarThickness = 2,
+				BorderSizePixel = 0,
+				Parent = dropFrame,
+			})
+
+			local optionButtons = {}
+			local function refresh()
+				local query = string.lower(searchBox.Text)
+				for _, b in pairs(optionButtons) do
+					local matches = string.find(string.lower(b.Text), query, 1, true) ~= nil
+					b.Visible = matches
+				end
+				local count = 0
+				for _, b in pairs(optionButtons) do
+					if b.Visible then count = count + 1 end
+				end
+				optionsHolder.CanvasSize = UDim2.new(0, 0, 0, count * 32 + 4)
+				local targetHeight = open and (86 + math.max(#options, 3) * 32) or 42
+				if open then
+					Tween(dropFrame, { Size = UDim2.new(1, 0, 0, targetHeight + 40) }, 0.2)
+				end
+			end
+
+			searchBox:GetPropertyChangedSignal("Text"):Connect(refresh)
+
 			for i, opt in ipairs(options) do
 				local optBtn = Create("TextButton", {
 					BackgroundColor3 = Rayflide.Theme.Current.Background,
-					Size = UDim2.new(1, -16, 0, 28),
-					Position = UDim2.new(0, 8, 0, 42 + (i - 1) * 32),
+					Size = UDim2.new(1, 0, 0, 28),
+					Position = UDim2.new(0, 0, 0, (i - 1) * 32),
 					Text = opt,
 					Font = Enum.Font.Gotham,
 					TextColor3 = Rayflide.Theme.Current.TextColor,
-					TextSize = 13,
+					TextSize = 12,
 					AutoButtonColor = false,
-					Parent = dropFrame,
+					Parent = optionsHolder,
 				})
-				Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = optBtn })
+				AddCorner(optBtn, 6)
+				optBtn.MouseEnter:Connect(function()
+					Tween(optBtn, { BackgroundColor3 = Rayflide.Theme.Current.ElementBackgroundHover }, 0.1)
+				end)
+				optBtn.MouseLeave:Connect(function()
+					Tween(optBtn, { BackgroundColor3 = Rayflide.Theme.Current.Background }, 0.1)
+				end)
 				optBtn.MouseButton1Click:Connect(function()
 					if multi then
-						-- simple multi support
 						current = current or {}
 						local idx = table.find(current, opt)
 						if idx then
@@ -932,12 +1477,12 @@ function Rayflide:CreateWindow(settings)
 						Toggle()
 					end
 					if flag then Rayflide.Flags[flag] = current end
-					if opts.Callback then
-						task.spawn(opts.Callback, current)
-					end
+					if opts.Callback then task.spawn(opts.Callback, current) end
 				end)
 				table.insert(optionButtons, optBtn)
 			end
+
+			refresh()
 
 			return {
 				Set = function(_, val)
@@ -949,6 +1494,9 @@ function Rayflide:CreateWindow(settings)
 			}
 		end
 
+		-- ============================================================
+		-- ELEMENT: LABEL
+		-- ============================================================
 		function Tab:CreateLabel(opts)
 			opts = opts or {}
 			local labelFrame = Create("Frame", {
@@ -972,6 +1520,9 @@ function Rayflide:CreateWindow(settings)
 			}
 		end
 
+		-- ============================================================
+		-- ELEMENT: PARAGRAPH
+		-- ============================================================
 		function Tab:CreateParagraph(opts)
 			opts = opts or {}
 			local para = Create("Frame", {
@@ -979,8 +1530,8 @@ function Rayflide:CreateWindow(settings)
 				Size = UDim2.new(1, 0, 0, 0),
 				Parent = page,
 			})
-			Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = para })
-			Create("UIStroke", { Color = Rayflide.Theme.Current.Stroke, Thickness = 1, Parent = para })
+			AddCorner(para, 8)
+			AddStroke(para, Rayflide.Theme.Current.Stroke, 1)
 
 			local title = Create("TextLabel", {
 				BackgroundTransparency = 1,
@@ -1008,7 +1559,7 @@ function Rayflide:CreateWindow(settings)
 				Parent = para,
 			})
 
-			local size = game:GetService("TextService"):GetTextSize(opts.Content or "", 13, Enum.Font.Gotham, Vector2.new(page.AbsoluteSize.X - 48, 2000))
+			local size = TextService:GetTextSize(opts.Content or "", 13, Enum.Font.Gotham, Vector2.new(page.AbsoluteSize.X - 48, 2000))
 			content.Size = UDim2.new(1, -24, 0, size.Y + 4)
 			para.Size = UDim2.new(1, 0, 0, 42 + size.Y)
 
@@ -1017,7 +1568,7 @@ function Rayflide:CreateWindow(settings)
 					if t then title.Text = t end
 					if c then
 						content.Text = c
-						local s = game:GetService("TextService"):GetTextSize(c, 13, Enum.Font.Gotham, Vector2.new(page.AbsoluteSize.X - 48, 2000))
+						local s = TextService:GetTextSize(c, 13, Enum.Font.Gotham, Vector2.new(page.AbsoluteSize.X - 48, 2000))
 						content.Size = UDim2.new(1, -24, 0, s.Y + 4)
 						para.Size = UDim2.new(1, 0, 0, 42 + s.Y)
 					end
@@ -1025,6 +1576,9 @@ function Rayflide:CreateWindow(settings)
 			}
 		end
 
+		-- ============================================================
+		-- ELEMENT: KEYBIND
+		-- ============================================================
 		function Tab:CreateKeybind(opts)
 			opts = opts or {}
 			local current = opts.CurrentKeybind or "E"
@@ -1036,8 +1590,8 @@ function Rayflide:CreateWindow(settings)
 				Size = UDim2.new(1, 0, 0, 42),
 				Parent = page,
 			})
-			Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = kbFrame })
-			Create("UIStroke", { Color = Rayflide.Theme.Current.Stroke, Thickness = 1, Parent = kbFrame })
+			AddCorner(kbFrame, 8)
+			AddStroke(kbFrame, Rayflide.Theme.Current.Stroke, 1)
 
 			local label = Create("TextLabel", {
 				BackgroundTransparency = 1,
@@ -1053,8 +1607,8 @@ function Rayflide:CreateWindow(settings)
 
 			local keyBtn = Create("TextButton", {
 				BackgroundColor3 = Rayflide.Theme.Current.Background,
-				Position = UDim2.new(1, -90, 0.5, -12),
-				Size = UDim2.new(0, 78, 0, 24),
+				Position = UDim2.new(1, -94, 0.5, -12),
+				Size = UDim2.new(0, 82, 0, 24),
 				Font = Enum.Font.GothamBold,
 				Text = current,
 				TextColor3 = Rayflide.Theme.Current.TextColor,
@@ -1062,28 +1616,30 @@ function Rayflide:CreateWindow(settings)
 				AutoButtonColor = false,
 				Parent = kbFrame,
 			})
-			Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = keyBtn })
+			AddCorner(keyBtn, 6)
+			AddStroke(keyBtn, Rayflide.Theme.Current.Stroke, 1)
 
 			local listening = false
 			keyBtn.MouseButton1Click:Connect(function()
 				listening = true
 				keyBtn.Text = "..."
+				keyBtn.TextColor3 = Rayflide.Theme.Current.Accent
 			end)
 
 			UserInputService.InputBegan:Connect(function(input, gpe)
-				if listening and not gpe then
+				if gpe then return end
+				if listening then
 					local key = input.KeyCode.Name
 					if key ~= "Unknown" then
 						current = key
 						keyBtn.Text = key
+						keyBtn.TextColor3 = Rayflide.Theme.Current.TextColor
 						listening = false
 						if flag then Rayflide.Flags[flag] = key end
-						if opts.Callback then
-							task.spawn(opts.Callback, key)
-						end
+						if opts.Callback then task.spawn(opts.Callback, key) end
 					end
-				elseif not gpe and input.KeyCode.Name == current and opts.Callback then
-					-- hold / press logic can be extended
+				elseif input.KeyCode.Name == current and opts.Callback then
+					task.spawn(opts.Callback, current)
 				end
 			end)
 
@@ -1097,6 +1653,9 @@ function Rayflide:CreateWindow(settings)
 			}
 		end
 
+		-- ============================================================
+		-- ELEMENT: COLOR PICKER (full HSV modal)
+		-- ============================================================
 		function Tab:CreateColorPicker(opts)
 			opts = opts or {}
 			local current = opts.Color or Color3.fromRGB(99, 102, 241)
@@ -1108,8 +1667,8 @@ function Rayflide:CreateWindow(settings)
 				Size = UDim2.new(1, 0, 0, 42),
 				Parent = page,
 			})
-			Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = cpFrame })
-			Create("UIStroke", { Color = Rayflide.Theme.Current.Stroke, Thickness = 1, Parent = cpFrame })
+			AddCorner(cpFrame, 8)
+			AddStroke(cpFrame, Rayflide.Theme.Current.Stroke, 1)
 
 			local label = Create("TextLabel", {
 				BackgroundTransparency = 1,
@@ -1125,22 +1684,13 @@ function Rayflide:CreateWindow(settings)
 
 			local preview = Create("Frame", {
 				BackgroundColor3 = current,
-				Position = UDim2.new(1, -42, 0.5, -12),
-				Size = UDim2.new(0, 30, 0, 24),
+				Position = UDim2.new(1, -48, 0.5, -12),
+				Size = UDim2.new(0, 36, 0, 24),
 				Parent = cpFrame,
 			})
-			Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = preview })
+			AddCorner(preview, 6)
+			AddStroke(preview, Rayflide.Theme.Current.Stroke, 1)
 
-			-- Simple cycle for demo (can be expanded to full picker)
-			local colors = {
-				Color3.fromRGB(99, 102, 241),
-				Color3.fromRGB(239, 68, 68),
-				Color3.fromRGB(34, 197, 94),
-				Color3.fromRGB(234, 179, 8),
-				Color3.fromRGB(14, 165, 233),
-				Color3.fromRGB(168, 85, 247),
-			}
-			local idx = 1
 			local btn = Create("TextButton", {
 				BackgroundTransparency = 1,
 				Size = UDim2.new(1, 0, 1, 0),
@@ -1148,13 +1698,12 @@ function Rayflide:CreateWindow(settings)
 				Parent = cpFrame,
 			})
 			btn.MouseButton1Click:Connect(function()
-				idx = idx % #colors + 1
-				current = colors[idx]
-				preview.BackgroundColor3 = current
-				if flag then Rayflide.Flags[flag] = current end
-				if opts.Callback then
-					task.spawn(opts.Callback, current)
-				end
+				OpenColorPicker(Rayflide.Windows[#Rayflide.Windows].Main, current, function(c)
+					current = c
+					preview.BackgroundColor3 = c
+					if flag then Rayflide.Flags[flag] = c end
+					if opts.Callback then task.spawn(opts.Callback, c) end
+				end)
 			end)
 
 			return {
@@ -1170,7 +1719,9 @@ function Rayflide:CreateWindow(settings)
 		return Tab
 	end
 
-	-- Config system (basic)
+	-- ============================================================
+	-- CONFIG SYSTEM
+	-- ============================================================
 	if configSaving.Enabled then
 		local folder = configSaving.FolderName or "Rayflide"
 		local file = (configSaving.FileName or "config") .. ".json"
@@ -1178,7 +1729,11 @@ function Rayflide:CreateWindow(settings)
 		function Window:SaveConfig()
 			if writefile then
 				local data = HttpService:JSONEncode(Rayflide.Flags)
-				pcall(writefile, folder .. "/" .. file, data)
+				pcall(function()
+					if not isfolder or isfolder(folder) then
+						writefile(folder .. "/" .. file, data)
+					end
+				end)
 			end
 		end
 
@@ -1195,40 +1750,39 @@ function Rayflide:CreateWindow(settings)
 			end
 		end
 
-		-- Auto load
-		task.defer(function()
-			Window:LoadConfig()
-		end)
+		task.defer(function() Window:LoadConfig() end)
 	end
 
 	function Window:Destroy()
 		ScreenGui:Destroy()
 	end
 
-	table.insert(Rayflide.Windows, Window)
-
-	-- Loading screen simulation
+	-- ============================================================
+	-- LOADING SCREEN (REDESIGNED with progress bar)
+	-- ============================================================
 	local Loading = Create("Frame", {
 		BackgroundColor3 = Rayflide.Theme.Current.Background,
 		Size = UDim2.new(1, 0, 1, 0),
 		Parent = Main,
 		ZIndex = 10,
 	})
-	Create("UICorner", { CornerRadius = UDim.new(0, 12), Parent = Loading })
+	AddCorner(Loading, 12)
 
+	-- Animated title
 	local loadTitle = Create("TextLabel", {
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 0, 0.4, 0),
-		Size = UDim2.new(1, 0, 0, 30),
+		Position = UDim2.new(0, 0, 0.35, 0),
+		Size = UDim2.new(1, 0, 0, 32),
 		Font = Enum.Font.GothamBold,
 		Text = loadingTitle,
 		TextColor3 = Rayflide.Theme.Current.TextColor,
-		TextSize = 22,
+		TextSize = 24,
 		Parent = Loading,
 	})
+
 	local loadSub = Create("TextLabel", {
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 0, 0.4, 32),
+		Position = UDim2.new(0, 0, 0.35, 36),
 		Size = UDim2.new(1, 0, 0, 20),
 		Font = Enum.Font.Gotham,
 		Text = loadingSubtitle,
@@ -1237,32 +1791,77 @@ function Rayflide:CreateWindow(settings)
 		Parent = Loading,
 	})
 
+	-- Progress bar
+	local progressBg = Create("Frame", {
+		BackgroundColor3 = Rayflide.Theme.Current.ToggleOff,
+		Position = UDim2.new(0.2, 0, 0.62, 0),
+		Size = UDim2.new(0.6, 0, 0, 6),
+		Parent = Loading,
+	})
+	AddCorner(progressBg, 999)
+
+	local progressFill = Create("Frame", {
+		BackgroundColor3 = Rayflide.Theme.Current.Accent,
+		Size = UDim2.new(0, 0, 1, 0),
+		Parent = progressBg,
+	})
+	AddCorner(progressFill, 999)
+
+	local percentLabel = Create("TextLabel", {
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 0, 0.62, 12),
+		Size = UDim2.new(1, 0, 0, 18),
+		Font = Enum.Font.Gotham,
+		Text = "0%",
+		TextColor3 = Rayflide.Theme.Current.SubTextColor,
+		TextSize = 12,
+		Parent = Loading,
+	})
+
 	task.spawn(function()
-		task.wait(0.8)
-		Tween(Loading, { BackgroundTransparency = 1 }, 0.4)
-		Tween(loadTitle, { TextTransparency = 1 }, 0.4)
-		Tween(loadSub, { TextTransparency = 1 }, 0.4)
-		task.wait(0.45)
+		local t = 0
+		local duration = settings.LoadingDuration or 1.0
+		while t < duration do
+			t = t + task.wait()
+			local p = math.clamp(t / duration, 0, 1)
+			progressFill.Size = UDim2.new(p, 0, 1, 0)
+			percentLabel.Text = tostring(math.floor(p * 100)) .. "%"
+		end
+		task.wait(0.15)
+		Tween(Loading, { BackgroundTransparency = 1 }, 0.35)
+		Tween(loadTitle, { TextTransparency = 1 }, 0.35)
+		Tween(loadSub, { TextTransparency = 1 }, 0.35)
+		Tween(progressBg, { BackgroundTransparency = 1 }, 0.35)
+		Tween(progressFill, { BackgroundTransparency = 1 }, 0.35)
+		Tween(percentLabel, { TextTransparency = 1 }, 0.35)
+		task.wait(0.4)
 		Loading:Destroy()
 	end)
 
+	table.insert(Rayflide.Windows, Window)
 	return Window
 end
 
--- Global helpers
+-- ============================================================
+-- GLOBAL HELPERS
+-- ============================================================
 function Rayflide:SetTheme(name)
 	if Rayflide.Theme[name] then
 		Rayflide.Theme.Current = table.clone(Rayflide.Theme[name])
-		-- Note: full live theme switch would require recoloring all elements
-		-- For production you can extend this
 	end
+end
+
+function Rayflide:GetThemes()
+	local names = {}
+	for k in pairs(Rayflide.Theme) do
+		if k ~= "Current" then table.insert(names, k) end
+	end
+	return names
 end
 
 function Rayflide:Destroy()
 	for _, w in pairs(Rayflide.Windows) do
-		if w.ScreenGui then
-			w.ScreenGui:Destroy()
-		end
+		if w.ScreenGui then w.ScreenGui:Destroy() end
 	end
 	Rayflide.Windows = {}
 end
